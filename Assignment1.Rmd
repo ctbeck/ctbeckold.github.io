@@ -1,0 +1,224 @@
+---
+title: "Assignment 1, Beck"
+author: "Catherine Beck"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##INPUT ALL THE DATA: 
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+
+years <- 2017:2021
+quarters <- 1:4
+types <- c("Electric", "Gas")
+
+pge_data <- NULL
+
+
+for(year in years){
+  for(quarter in quarters) {
+    for(type in types){
+      filename <- paste0(
+          "pge/PGE_",
+          year,
+          "_Q",
+          quarter,
+          "_",
+          type,
+          "UsageByZip.csv"
+        )
+  
+  ##show the file names 
+  print(filename)
+  
+  ##skip quarters 3 and 4 of year 2021
+  if((year == 2021)& (quarter %in% 3:4))next
+  
+  ## actually reading the data
+  temp <- read_csv(filename)
+  
+  ##converting the units for electric column
+  if(type == "Electric"){
+    temp <- temp %>% 
+      mutate(TOTALKBTU = TOTALKWH * 3.41214) %>%  ##conversion rate
+      select(-TOTALKWH,-AVERAGEKWH)
+  }
+  
+  ##converting the units for gas column 
+  if(type == "Gas"){
+    temp <- temp %>% 
+      mutate(TOTALKBTU = TOTALTHM * 99.9761) %>% 
+      select(-TOTALTHM, -AVERAGETHM)
+  }
+ 
+  ##bind and set the data
+  pge_data <- rbind(pge_data,temp)
+  saveRDS(pge_data, "pge_data.rds")
+
+    }
+  }
+}
+```
+
+## Filter customer class to only have residential/commerical gas/electric (4 bodies)
+```{r}
+pge_filter <- 
+  pge_data %>%
+  filter(
+    CUSTOMERCLASS %in% c("Gas- Commercial", "Elec- Commercial", "Gas- Residential", "Elec- Residential"),
+    ) %>%
+    group_by(
+      MONTH,
+      YEAR,
+      CUSTOMERCLASS
+    )%>%
+      summarize(
+        TOTALKBTU = sum(TOTALKBTU, na.rm = TRUE)
+      ) %>%
+      mutate(
+        DATE =
+          paste(
+            YEAR,
+            MONTH,
+            "01",
+            sep = "-"
+          ) %>% as.Date()
+      )
+  
+```
+
+
+##Create the residential bar chart
+```{r}
+pge_residential_chart <-
+  pge_filter %>% 
+  filter(CUSTOMERCLASS %in% c("Gas- Residential", "Elec- Residential")) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = DATE %>% factor(),
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  theme(axis.text.x = element_text(angle = 90))+ 
+  labs(
+    x = "Year",
+    y = "kBTU",
+    title = "PG&E Territory Monthly Residential Electricity Usage 2017-2020",
+    fill = "Electricity Type"
+  )
+## change the date range from monthly to yearly ==> change the x axis.
+##pge_residential_chart + scale_x_continuous(breaks = c(2017, 2018, 2019, 2020, 2021))
+
+
+#plot the chart
+pge_residential_chart
+```
+
+```{r}
+pge_commercial_chart <-
+  pge_filter %>% 
+  filter(CUSTOMERCLASS %in% c("Gas- Commercial", "Elec- Commercial")) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = DATE %>% factor(),
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  theme(axis.text.x = element_text(angle = 90))+ 
+  labs(
+    x = "Months",
+    y = "kBTU",
+    title = "PG&E Territory Monthly Residential Electricity Usage 2017-2020",
+    fill = "Electricity Type"
+  )
+ 
+## change the date range from monthly to yearly ==> change the x axis.
+##pge_residential_chart + scale_x_continuous(breaks = c(2017, 2018, 2019, 2020, 2021))
+
+
+#plot the chart
+pge_commercial_chart
+```
+
+##plot a third chart for 2020 electricity usage 
+
+```{r}
+pge_2020_chart <-
+  pge_filter %>% 
+  filter(CUSTOMERCLASS %in% c("Gas- Commercial", "Elec- Commercial", "Gas- Residential", "Elect- Commercial")) %>% 
+  filter(year %in% 2020) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = DATE %>% factor(),
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  theme(axis.text.x = element_text(angle = 90))+ 
+ 
+  labs(
+    x = "Months",
+    y = "kBTU",
+    title = "PG&E Territory Monthly Residential Electricity Usage 2020",
+    fill = "Electricity Type"
+  )
+## change the date range from monthly to yearly ==> change the x axis.
+##pge_residential_chart + scale_x_continuous(breaks = c(2017, 2018, 2019, 2020, 2021))
+
+
+#plot the chart
+pge_2020_chart
+```
+
+##plot a fourt chart for 2019 electricity usage 
+```{r}
+pge_2019_chart <-
+  pge_filter %>% 
+  filter(CUSTOMERCLASS %in% c("Gas- Commercial", "Elec- Commercial", "Gas- Residential", "Elect- Commercial")) %>% 
+  filter(year %in% c("2019")) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = DATE %>% factor(),
+      y = TOTALKBTU,
+      fill = CUSTOMERCLASS
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  theme(axis.text.x = element_text(angle = 90))+ 
+  labs(
+    x = "Months",
+    y = "kBTU",
+    title = "PG&E Territory Monthly Residential Electricity Usage 2019",
+    fill = "Electricity Type"
+  )
+## change the date range from monthly to yearly ==> change the x axis.
+##pge_residential_chart + scale_x_continuous(breaks = c(2017, 2018, 2019, 2020, 2021))
+
+
+#plot the chart
+pge_2019_chart
+```
+
+##Results from Comparison of 2020 vs 2019
+
+Interestingly, the usage of all electricity/gas commercially and residentially dropped in 2020. My gut instic was that the residential energy consumption would have increased with people spending most of their time during the pandemic in their homes and working from home. By the winter months of 2020, energy usage goes back up for both residential and commercial usage (with a greater emphasis on commercial usage). 

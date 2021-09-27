@@ -8,6 +8,48 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Install the tidyverse package and load the tidyverse: 
+  Note, you can install packages directly in the console
+```{r}
+library(tidyverse)
+
+health_full <- read_csv("https://chronicdata.cdc.gov/api/views/swc5-untb/rows.csv?accessType=DOWNLOAD&bom=true&format=true")
+
+head(health_full)
+
+```
+
+
+what do you want to write, and where do you want to write it to? 
+```{r}
+write_csv(health_full, "health_full.csv")
+health_full_again <- read_csv("health_full.csv")
+
+#this helps you remove the data set, it's great if your environment gets too crowded 
+rm(health_full_again)
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## R Markdown
 
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
