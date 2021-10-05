@@ -1,0 +1,29 @@
+---
+title: "LabWeek2"
+author: "Catherine beck"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+```
+
+Download all of the necessary packages
+```{r}
+library(tidyverse)
+library(sf)
+library(tigris)
+library(censusapi)
+library(mapview)
+```
+
+Grab counties in any state in the US
+Loads county data with one column called geometry 
+```{r}
+ca_counties <- counties("CA", cb = T, progress_bar = F)
+```
+Map this data by specifying one dataset at time. Dataset must have a geometry column
+```{r}
+mapview(ca_counties)
+```
+
