@@ -61,7 +61,16 @@ scc_pop_race_2020 <-
     sep = "!!"
   )
 scc_blocks_2020 <- blocks("CA", "Santa Clara", year = 2020, progress_bar = F)
+
 ```
+
+
+SAVE THE scc_blocks_2020`
+```{r}
+saveRDS(scc_blocks_2020, "scc_blocks_2020.rds")
+scc_blocks_2020 <- readRDS("scc_blocks_2020.rds")
+```
+
 REMOVE DOUBLES FROM 2020 DATA
 ```{r}
 scc_pop_race_2020 <- scc_pop_race_2020 %>% 
@@ -104,31 +113,6 @@ la_blocks_2020 <- scc_blocks_2020 %>%
 ```
 
 
-SPATIAL SUBSETTING METHOD FROM 2.4
-
-```{r}
-##view(scc_pop_race_2020)
-## narrow down to just population numbers for 2020
-pop_2020 <- select(
-  scc_pop_race_2020,estimate)
-
-
-# do the actual block transformation
-
-la_blocks_2020_intersect <- la_blocks_2020 %>%
- st_transform(26910) %>%
-  mutate(original_area = st_area(.)) %>%
-  st_intersection(
-   scc_blocks_2020 %>%
-     select(GEOID20) %>%
-     st_transform(26910)
-  )%>%
-  mutate(
-    leftover_area = st_area(.),
-    perc_area = as.numeric(leftover_area / original_area),
-    pop_2020 = estimate * perc_area
-  )
-```
 
 GET DECEN. DATA FOR 2010 DIVIDED BY RACE 
 ```{r}
@@ -202,84 +186,100 @@ la_blocks_2010 <-  scc_blocks_2010 %>%
 ##mapview(la_blocks_2010, alpha.regions = 0, color = "blue", lwd = 2) + mapview(la_blocks_2020, alpha.regions = 0, color =  "green", lwd = 2)
 ```
 
+SPATIAL SUBSETTING 
 ```{r}
-##view(scc_pop_race_2020)
-## narrow down to just population numbers for 2020
-pop_2010 <- select(
-  scc_pop_race_2010,estimate)
+la_blocks_2010 <- scc_blocks_2010 %>%
+  .[la_boundary, ] %>% 
+  select(GEOID10) %>%
+  left_join(scc_pop_race_2010 %>% rename(GEOID10 = block))
 
+```
+SPATIAL SUBSETTING METHOD FROM 2.4
 
-# do the actual block transformation
+```{r}
 
-la_blocks_2010_intersect <- la_blocks_2010 %>%
+la_blocks_2020_intersect <- la_blocks_2020 %>%
  st_transform(26910) %>%
   mutate(original_area = st_area(.)) %>%
   st_intersection(
-   scc_blocks_2010 %>%
+   la_blocks_2010 %>%
      select(GEOID10) %>%
      st_transform(26910)
   )%>%
   mutate(
     leftover_area = st_area(.),
     perc_area = as.numeric(leftover_area / original_area),
-    pop_2010 = estimate * perc_area
+    pop_2020 = estimate * perc_area
   )
 ```
+
 POPULATION CHANGE 
 
 ```{r}
 la_blocks_2020_reshaped <- la_blocks_2020_intersect %>%
-  st_drop_geometry() %>%
-  group_by(estimate)%>%
+  st_drop_geometry() %>% ##we just want to focus on the "broken pieces" and putting them together
+  group_by(GEOID10)%>% ##GEOID10 > GEOID20 but either works
   summarize(
-    pop_2020 = sum(estimate, na.rm = T) %>% round(),
+    pop_2020 = sum(pop_2020, na.rm = T) %>% round(), ##add all the small pop counts to a larger pop count
   )
 ```
 
-```{r}
-la_blocks_2010_reshaped <- la_blocks_2010_intersect %>%
-  st_drop_geometry() %>%
-  group_by(estimate)%>%
-  summarize(
-    pop_2010 = sum(estimate, na.rm = T) %>% round(),
-  )
+##turns off the previous code for knitting at the end, do this to all above
+```{r, eval = F} 
+
 ```
 
 
 
 ```{r}
-projection <- la_blocks_2020_intersect
-la_pop_2010_2020 <- la_blocks_2010 %>% 
-  left_join(pop_2020) %>% 
+projection <- "+proj=utm +zone=10 +ellps=GRS80 +datum=NAD83 +units=ft +no_defs"
+la_pop_2010_2020 <- la_blocks_2010 %>%
+  st_transform(projection) %>%
+  left_join(la_blocks_2020_reshaped) %>% ##blocks now have GEOIDs and pop info. 
   mutate(
-    absolute_pop = (pop_2020 - pop_2010) / as.numeric(perc_area) * 5280^2 / 1000
+    absolute_pop = (pop_2020 - pop_2010) / as.numeric(st_area(.)) * 43560 ##pop per acre, 43560 converts from sq ft to acres
   )
+##will help knit for overflow issues 
+saveRDS(la_pop_2010_2020, "la_pop_2010_2020.rds")
 ```
 
 ```{r}
-max <- max(abs(50000), abs(50000))
+max <- max(abs(la_pop_2010_2020$absolute_pop)) ##take every single pop change you created and makes them all abs values and tells you what the biggest one was. 
 absolute_pal <- colorNumeric(
-  palette = "piYG",
-  domain = c(-1,5000)
+  palette = "PiYG",
+  domain = c(-max, max) #feeding the data which was placed in the max variable into the symmetrical color palette. 
 )
 ```
 
 MAP
 ```{r}
+la_pop_2010_2020 <- readRDS("la_pop_2010_2020.rds") ##will help knit for overflow issues 
+
 leaflet() %>% 
   addProviderTiles(providers$CartoDB.Positron) %>% 
   addPolygons(
     data = la_pop_2010_2020,
-    stroke = F,
-    fillOpacity = 0.5
+    fillColor = ~absolute_pal(absolute_pop), ##use the pal relevant to your range of colors)
+     color = "white",
+    opacity = 0.5,
+    fillOpacity = 0.75,
+    weight = 1,
+    label = ~paste0(
+      round(absolute_pop)
+    ),
+    highlightOptions = highlightOptions(
+      weight = 2,
+      opacity = 1
+    )
   ) %>% 
-  addPolygons(
-   data = la_blocks_2010,
-   color = "red",
-   weight = 0.75,
-   fill = F
+  addLegend(
+    data = la_pop_2010_2020,
+    pal = absolute_pal,
+    values = ~absolute_pop,
+    title = "Population Difference in Los Altos Between 2010 and 2020"
   )
 ```
+
 
 
 REFLECTION:
