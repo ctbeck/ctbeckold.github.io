@@ -233,4 +233,4 @@ leaflet() %>%
 
 REFLECTION:
 
-I think I am missing something having to do with density? Overall I found this assingment really difficult. As a beginner coder, I feel super unsuported when it comes to programming. Though I appreciate the office hours (which meet during my class so cannot attend) and the slack channel, I feel I am missing a fundamental understanding of programming. Workshops, labs, or crash courses would be super helpful. Any time you all give me help, I don't know how to interpret it because I don't know fundamentals of programming. 
+Referencing the slack group message, I think this is the correct map for Los Altos despite no mapping due to an outlier that Derek mentioned. I'm not sure what grand takeaway I'm supposed to see given that there isn't really shading. Would have been cool to really figure out the divided by race methods, but super happy to have gotten the satisfaction of a final product. 
