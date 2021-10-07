@@ -31,34 +31,20 @@ dec_vars_2020 <-
     type = "variables"
   )
 
-##Access the subdivision by race 
-scc_pop_race_2020 <-
+##Access the population data 
+
+scc_pop_2020 <-
   getCensus(
     name = "dec/pl",
     vintage = 2020,
     region = "block:*", 
     regionin = "state:06+county:085",
-    vars = "group(P1)" ##all pop subdivided by race, still total pop
-  ) %>% 
-  mutate(
+    vars = "P1_001N"
+  )%>% 
+  transmute(
     block =
-      paste0(state,county,tract,block)
-  ) %>% 
-  select(!c(GEO_ID,state,county,tract,NAME) & !ends_with(c("NA"))) %>% 
-  pivot_longer(
-    ends_with("N"),
-    names_to = "name",
-    values_to = "estimate"
-  ) %>%
-  left_join(
-    dec_vars_2020 %>% 
-      select(name, label)
-  ) %>% 
-  select(-name) %>% 
-  separate(
-    label,
-    into = c(NA,NA,"category1","category2"),
-    sep = "!!"
+      paste0(state,county,tract,block),
+    pop_2020 = P1_001N
   )
 scc_blocks_2020 <- blocks("CA", "Santa Clara", year = 2020, progress_bar = F)
 
@@ -69,19 +55,6 @@ SAVE THE scc_blocks_2020`
 ```{r}
 saveRDS(scc_blocks_2020, "scc_blocks_2020.rds")
 scc_blocks_2020 <- readRDS("scc_blocks_2020.rds")
-```
-
-REMOVE DOUBLES FROM 2020 DATA
-```{r}
-scc_pop_race_2020 <- scc_pop_race_2020 %>% 
-  mutate(
-    race = case_when(
-      category1 == "Population of two or more races:" & is.na(category2) ~ "Two or more races",
-      category1 == "Population of two or more races:" ~ "",
-      !is.na(category2) ~ category2,
-      TRUE ~ ""
-    )
-  )
 ```
 
 
@@ -97,74 +70,58 @@ la_blocks_2020 <-  scc_blocks_2020 %>%
   left_join(scc_blocks_2020 %>% select(GEOID20)) %>% ##when joining two cols you need to specify what cols to join across the two datasets
   st_as_sf() %>%
   select(GEOID20) %>%
-  left_join(scc_pop_race_2020 %>% rename(GEOID20 = block))
+  left_join(scc_pop_2020 %>% rename(GEOID20 = block))
 
 ##mapview(la_blocks_2020, alpha.regions = 0, color = "red", lwd = 2)
 ```
-
+SAVE THE la_blocks_2020
+```{r}
+saveRDS(la_blocks_2020, "la_blocks_2020.rds")
+la_blocks_2020 <- readRDS("la_blocks_2020.rds")
+```
 
 SPATIAL SUBSETTING 
 ```{r}
 la_blocks_2020 <- scc_blocks_2020 %>%
   .[la_boundary, ] %>% 
   select(GEOID20) %>%
-  left_join(scc_pop_race_2020 %>% rename(GEOID20 = block))
+  left_join(scc_pop_2020 %>% rename(GEOID20 = block))
 
 ```
 
 
 
-GET DECEN. DATA FOR 2010 DIVIDED BY RACE 
+GET DECEN. POP DATA FOR 2010 
 ```{r}
 dec_vars_2010 <-
   listCensusMetadata(
     name = "2010/dec/pl",
     type = "variables"
   )
-scc_pop_race_2010 <-
+
+scc_pop_2010 <-
   getCensus(
     name = "dec/pl",
     vintage = 2010,
     region = "block:*", 
     regionin = "state:06+county:085",
-    vars = "group(P1)"
+    vars = "P001001"
   ) %>% 
-  mutate(
+  transmute(
     block =
-      paste0(state,county,tract,block)
-  ) %>% 
-  select(!c(GEO_ID,state,county,tract,NAME) & !ends_with(c("NA"))) %>% 
-  pivot_longer(
-    -block,
-    names_to = "name",
-    values_to = "estimate"
-  ) %>%
-  left_join(
-    dec_vars_2010 %>% 
-      select(name, label)
-  ) %>% 
-  select(-name) %>% 
-  separate(
-    label,
-    into = c(NA,NA,"category1","category2"),
-    sep = "!!"
+      paste0(state,county,tract,block),
+    pop_2010 = P001001
   )
+
 scc_blocks_2010 <- blocks("CA", "Santa Clara", year = 2010, progress_bar = F)
 ```
 
-REMOVE DOUBLES FROM 2010 DATA
+SAVE THE scc_blocks_2010
 ```{r}
-scc_pop_race_2010 <- scc_pop_race_2010 %>% 
-  mutate(
-    race = case_when(
-      category1 == "Population of two or more races:" & is.na(category2) ~ "Two or more races",
-      category1 == "Population of two or more races:" ~ "",
-      !is.na(category2) ~ category2,
-      TRUE ~ ""
-    )
-  )
-
+saveRDS(la_blocks_2020, "scc_blocks_2010.rds")
+scc_blocks_2010 <- readRDS("scc_blocks_2010.rds")
 ```
+
 
 MAP 2010 BLOCKS ALLIGNED GEOMETRY SET: 
 
@@ -176,28 +133,15 @@ la_blocks_2010 <-  scc_blocks_2010 %>%
   st_centroid() %>% 
   .[la_boundary, ] %>% 
   st_drop_geometry()  %>% 
-  left_join(scc_blocks_2010 %>% select(GEOID10)) %>% ##when joining two cols you need to specify what cols to join across the two datasets
+  left_join(scc_blocks_2010 %>% select(GEOID10)) %>% 
   st_as_sf() %>%
   select(GEOID10) %>%
-  left_join(scc_pop_race_2010 %>% rename(GEOID10 = block))
-
- ##mapview(la_blocks_2010, alpha.regions = 0, color = "green", lwd = 2)
-
-##mapview(la_blocks_2010, alpha.regions = 0, color = "blue", lwd = 2) + mapview(la_blocks_2020, alpha.regions = 0, color =  "green", lwd = 2)
+  left_join(scc_pop_2010 %>% rename(GEOID10 = block))
 ```
 
-SPATIAL SUBSETTING 
-```{r}
-la_blocks_2010 <- scc_blocks_2010 %>%
-  .[la_boundary, ] %>% 
-  select(GEOID10) %>%
-  left_join(scc_pop_race_2010 %>% rename(GEOID10 = block))
-
-```
 SPATIAL SUBSETTING METHOD FROM 2.4
 
 ```{r}
-
 la_blocks_2020_intersect <- la_blocks_2020 %>%
  st_transform(26910) %>%
   mutate(original_area = st_area(.)) %>%
@@ -209,7 +153,7 @@ la_blocks_2020_intersect <- la_blocks_2020 %>%
   mutate(
     leftover_area = st_area(.),
     perc_area = as.numeric(leftover_area / original_area),
-    pop_2020 = estimate * perc_area
+    pop_2020 = pop_2020 * perc_area
   )
 ```
 
