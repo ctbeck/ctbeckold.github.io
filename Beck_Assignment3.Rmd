@@ -1,0 +1,170 @@
+---
+title: "Beck_Assignment3"
+author: "Catherine Beck"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+Download all of the necessary packages and access Census data with key
+```{r}
+library(tidyverse)
+library(sf)
+library(tigris)
+library(censusapi)
+library(mapview)
+library(tidycensus)
+library(leaflet)
+Sys.setenv(CENSUS_KEY ="c18a7f6e5cbbd1e7f0d3047d8b674cbaad89bcb3")
+
+temp <- tempfile()
+download.file("https://www2.census.gov/programs-surveys/acs/data/pums/2019/1-Year/csv_hca.zip",destfile = temp)
+
+pums_hca_2019_1yr <- read_csv(unzip(temp,"psam_h06.csv"))
+
+unlink(temp)
+```
+
+Open the PUMS filed
+
+```{r, eval = F}
+pums_2019_1yr <- getCensus(
+  name = "acs/acs1/pums",
+  vintage = 2019,
+  region = "public use microdata area:*", 
+  regionin = "state:06",
+  vars = c(
+    "SERIALNO",
+    "SPORDER",
+    "PWGTP",
+    "WGTP",
+    "NP",
+    "HHL",
+    "HINCP",
+    "TEN"
+  )
+)
+
+saveRDS(pums_2019_1yr, "pums_2019_1yr.rds")
+```
+
+Open just the pums data
+```{r}
+pums_2019_1yr <- readRDS("pums_2019_1yr.rds")
+```
+
+Narrow down PUMS to just the Bay Area
+
+```{r, eval = F}
+ca_pumas <-
+  pumas("CA", cb = T, progress_bar = F)
+
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+bay_counties <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME %in% bay_county_names)
+
+bay_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[bay_counties, ] %>% 
+  st_drop_geometry() %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+
+bay_pums <-
+  pums_2019_1yr %>% 
+  mutate(
+    PUMA = str_pad(public_use_microdata_area,5,"left","0")
+  ) %>% 
+  filter(PUMA %in% bay_pumas$PUMACE10)
+
+saveRDS(bay_pums, "bay_pums.rds")
+saveRDS(bay_pumas, "bay_pumas.rds")
+```
+
+Open the Bay Pums Data
+
+```{r}
+bay_pums <- readRDS("bay_pums.rds")
+bay_pumas <- readRDS("bay_pumas.rds")
+```
+
+Narrow Down to Multi-Generational, Low-Income Households 
+
+```{r}
+bay_pums_age <-
+  bay_pums %>% 
+  filter(!duplicated(SERIALNO)) %>% 
+  mutate(
+    WGTP = as.numeric(WGTP),
+    multigen_renter_lowinc = ifelse(
+      (HHL != 1) &
+        (TEN == 3) &
+        (HINCP < 100000),
+      WGTP,
+      0
+    )
+  ) %>% 
+  group_by(PUMA) %>% 
+  summarize(
+    perc_multigen_renter_lowinc =
+      sum(multigen_renter_lowinc, na.rm =T)/sum(WGTP, na.rm = T)*100
+  ) %>% 
+  left_join(
+    bay_pumas %>% 
+      select(PUMACE10),
+    by = c("PUMA" = "PUMACE10")
+  ) %>% 
+  st_as_sf()
+```
+
+MAP
+
+```{r}
+pums_pal <- colorNumeric(
+  palette = "Reds",
+  domain = bay_pums_age$perc_multigen_renter_lowinc
+)
+
+leaflet() %>%
+  addTiles() %>% 
+  addPolygons(
+    data = bay_pums_age,
+    fillColor = ~pums_pal(perc_multigen_renter_lowinc),
+    color = "white",
+    opacity = 0.5,
+    fillOpacity = 0.5,
+    weight = 1,
+    label = ~paste0(
+      round(perc_multigen_renter_lowinc), 
+      "% Multigenerational renter households making less than $100K"
+    ),
+    highlightOptions = highlightOptions(
+      weight = 2,
+      opacity = 1
+    )
+  ) %>% 
+  addLegend(
+    data = bay_pums_age,
+    pal = pums_pal,
+    values = ~perc_multigen_renter_lowinc,
+    title = "% Multigenerational<br>renter households<br>making less than $100K"
+  )
+```
+
+I chose to look at multigenerational, low income, renters as my specific subpopulation. I think they are most at risk because of long-standing disparities in health-care access and other histroic inequalities associated with front line communities. I chose multigenerational households because of my interview from last Tuesday where a housemate remarked that heat waves were scary in her home because she has a set of grandparents that get parked in front of the AC unit in the only room with AC. This is made scarrier with COVID where she can't enter that space as a young college student when she goes home. I found it really iteresting that the greatest percentages were associated with San Jose and the surrounding subrubs as well as the tip of San Francisco. I wouldn't have associated those two cities with that kind of inequality. 

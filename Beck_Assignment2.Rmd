@@ -142,12 +142,12 @@ SPATIAL SUBSETTING METHOD FROM 2.4
 
 ```{r}
 la_blocks_2020_intersect <- la_blocks_2020 %>%
- st_transform(26910) %>%
+ st_transform(4326) %>%
   mutate(original_area = st_area(.)) %>%
   st_intersection(
    la_blocks_2010 %>%
      select(GEOID10) %>%
-     st_transform(26910)
+     st_transform(4326)
   )%>%
   mutate(
     leftover_area = st_area(.),
