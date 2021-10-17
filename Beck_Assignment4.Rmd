@@ -1,0 +1,123 @@
+---
+title: "Beck_Assignment3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+##Download libraries
+```{r}
+library(tidyverse)
+library(sf)
+library(tigris)
+library(censusapi)
+library(mapview)
+library(tidycensus)
+library(leaflet)
+library(readxl)
+Sys.setenv(CENSUS_KEY ="c18a7f6e5cbbd1e7f0d3047d8b674cbaad89bcb3")
+
+acs_vars_2019_5yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs5",
+    type = "variables"
+  )
+
+```
+
+
+
+##Download the data from ACS B19001 tables to choose for race/education add up a - g for pop by using a for loop
+```{r}
+census_race_categories <- 
+  c(
+    "White Alone",
+    "Black or African American",
+    "American Indian and Alaska Native Alone",
+    "Asian Alone",
+    "Native Hawaiian and Other Pacific Islander Alone",
+    "Some Other Race Alone",
+    "Two or More Races"
+  )
+
+bay_ed_race <-
+  1:7 %>% 
+  map_dfr(function(x){
+    getCensus(
+      name = "acs/acs5",
+      vintage = 2019,
+      region = "county:085",
+      regionin = "state:06",
+      vars = paste0("group(C15002",LETTERS[x],")")
+    ) %>%
+      select(!c(GEO_ID,state,county,NAME) & !ends_with(c("EA","MA","M"))) %>%
+      pivot_longer(
+        ends_with("E"),
+        names_to = "name",
+        values_to = "estimate"
+      ) %>%
+      left_join(
+        acs_vars_2019_5yr %>% 
+          select(name, label)
+      ) %>% 
+      select(-name) %>% 
+      separate(
+        label,
+        into = c(NA,NA,NA,"education"),
+        sep = "!!"
+      ) %>% 
+      group_by(education) %>% 
+      summarize(across(everything(), sum)) %>% 
+      filter(!is.na(education)) %>% 
+      mutate(race = census_race_categories[x])
+  })
+```
+
+##Graph 
+```{r}
+bay_race_total <-
+  bay_ed_race %>% 
+  group_by(race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  mutate(education = "Total")
+
+bay_ed_race %>% 
+  group_by(education, race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  rbind(bay_race_total) %>% 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = education %>% factor(levels = rev(c("Total",unique(bay_ed_race$education)))),
+      y = estimate,
+      fill = race %>% factor(levels = rev(unique(bay_ed_race$race)))
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+     x = "Educational Attainment",
+    y = "Proportion of Population 25 years or older",
+    title = "San Mateo County Educational Attainment by race",
+    fill = "Race"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  )  +
+  guides(
+    fill = guide_legend(
+      reverse = T
+    )
+  )
+```
+
+
+Comments:
+
+The proportion of educational attainment is overwhelmingly attributed to the white population, especially when you get to secondary education and University/beyond level. This is not suprising, but visualizing the graph and seeing how small the represetnation of Black/African-American and Indigenous populations are is very disheartening. San Mateo county is home to some of the greatest discrimination in this state, and seeing how that plays out across education levels is even more evidence to that fact. 
+
+
