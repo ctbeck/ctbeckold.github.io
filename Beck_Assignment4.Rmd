@@ -1,5 +1,5 @@
 ---
-title: "Beck_Assignment3"
+title: "Beck_Assignment4"
 output: html_document
 ---
 
@@ -247,19 +247,9 @@ bay_education_ethnicity_2019_stacked <- ##Lets you add a total ethnicity
   ggplot() +
   geom_bar(
     aes(
-      x = education%>% factor(levels = rev(c(
-        "Total",
-        "Less than high school diploma",
-        "High school graduate (includes equivalency)",
-        "Some college or associate's degree",
-        "Bachelor's degree or higher"
-      ))),
+      x = education %>% factor(levels = rev(c("Total", unique(bay_education_ethnicity_2019$education)))),
       y = estimate,
-      fill = ethnicity %>% factor(levels = rev(c(
-        "Latinx",
-        "White Not Latinx",
-        "Not White, Not Latinx"
-      )))
+      fill = ethnicity %>% factor(levels = rev(unique(bay_education_ethnicity_2019$ethnicity)))
     ),
     stat = "identity",
     position = "stack"
@@ -286,5 +276,7 @@ bay_education_ethnicity_2019_stacked
 bay_education_ethnicity_2019_fill
 ```
 
+
+
 Commentary: 
-Once again, there is an overrepresentation of White, not latinx folks within  educational attainment in the Bay. (I also don't know how to remove NA, but if NA were gone you'd get a better sense of how educational attainment, especially above the high school level (let alone college) is very white)
+Once again, there is an overrepresentation of White, not latinx folks within  educational attainment in the Bay. There seems to be a nearly equal amount of white, not latinx people as the population of not white, not latinx which is a huge overrepresentation of one ethnicity/race in an educational setting. 
