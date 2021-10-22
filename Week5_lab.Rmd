@@ -8,3 +8,49 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+```{r}
+library(tidyverse)
+library(censusapi)
+library(sf)
+library(mapview)
+library(tigris)
+library(readxl)
+
+Sys.setenv(CENSUS_KEY="c18a7f6e5cbbd1e7f0d3047d8b674cbaad89bcb3")
+
+
+ces4 <- read_excel(
+    "calenviroscreen40resultsdatadictionary_F_2021.xlsx", 
+  sheet = "CES4.0FINAL_results"
+)
+colnames(ces4)
+
+##clean up the dataset
+ces4_clean <- ces4 %>%
+  select(!ends_with("Pctl"))
+
+##check for missing values
+sum(is.na(ces4_clean$Asthma))
+
+##manipulate the data to see the column values of poverty, is the same concept as line 33
+ces4_clean %>% 
+  # .$Poverty %>%
+  pull(Asthma) %>% 
+  is.na() %>% 
+  sum()
+
+ca_tracts <- tracts("CA")
+
+ces4_map <- ces4_clean %>% 
+  left_join(
+    ca_tracts %>% 
+      transmute(GEOID = GEOID %>% as.numeric()),
+    by = c("Census Tract" = "GEOID")
+  ) %>% 
+  ##make it spatial object
+  st_as_sf()
+
+mapview(ces4_map, zcol = "Asthma")
+mapview(ces4_map, zcol = "PM2.5")
+```
+

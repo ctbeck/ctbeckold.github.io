@@ -1,0 +1,198 @@
+---
+title: "Beck_Assignment5"
+author: "Catherine Beck" 
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r}
+library(tidyverse)
+library(censusapi)
+library(sf)
+library(mapview)
+library(tigris)
+library(readxl)
+library(leaflet)
+
+
+
+Sys.setenv(CENSUS_KEY="c18a7f6e5cbbd1e7f0d3047d8b674cbaad89bcb3")
+
+ces4 <- read_excel(
+    "calenviroscreen40resultsdatadictionary_F_2021.xlsx", 
+  sheet = "CES4.0FINAL_results"
+)
+colnames(ces4)
+
+##clean up the dataset
+ces4_clean <- ces4 %>%
+  select(!ends_with("Pctl"))
+
+```
+
+LOAD BAY PM 2.5 DATA
+```{r}
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+ca_tracts <- tracts("CA", cb = T, progress_bar = F)
+
+ces4_bay_pm25 <-
+  ces4 %>% 
+  filter(`California County` %in% bay_county_names) %>% 
+  select(`Census Tract`, PM2.5) %>% 
+  left_join(
+    ca_tracts %>% 
+      transmute(GEOID = as.numeric(GEOID)), 
+    by = c("Census Tract" = "GEOID")
+  ) %>% 
+  st_as_sf()
+
+pm25_pal <- colorNumeric(
+  palette = "Reds",
+  domain = ces4_bay_pm25$PM2.5
+)
+
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = ces4_bay_pm25,
+    fillColor = ~pm25_pal(PM2.5),
+    color = "white",
+    weight = 0.5,
+    fillOpacity = 0.5,
+    label = ~PM2.5
+  )
+```
+The areas of darker red are areas with higher concentration of PM 2.5, the lighter the area, the less concentration of  PM 2.5 There is a lot of PM 2.5 located in the East Bay by Oakland, Richmond, and Vallejo and a lot in the South Bay by San Mateo, Fremont, Newark, and Mountain View. 
+
+LOAD AND MAP ASTHMA DATA
+
+```{r}
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+ca_tracts <- tracts("CA", cb = T, progress_bar = F)
+
+ces4_bay_asthma_pm25 <-
+  ces4 %>% 
+  filter(`California County` %in% bay_county_names) %>% 
+  left_join(
+    ca_tracts %>% 
+      transmute(GEOID = as.numeric(GEOID)), 
+    by = c("Census Tract" = "GEOID")
+  ) %>% 
+  st_as_sf()
+
+asthma_pal <- colorNumeric(
+  palette = "Reds",
+  domain = ces4_bay_asthma_pm25$Asthma
+)
+
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = ces4_bay_asthma_pm25,
+    fillColor = ~asthma_pal(Asthma),
+    color = "white",
+    weight = 0.5,
+    fillOpacity = 0.5,
+    label = ~Asthma
+  )
+```
+The areas of darker red are areas with higher concentration of asthma, the lighter the area, the less concentration of people with asthma. There is a lot of asthma located in the East Bay by Oakland, Richmond, and Vallejo. 
+
+Clean the Data and Create the Scatter Plot with PM2.5 on the x-axis and Asthma on the y-axis
+```{r}
+bay_asthma_pm_tract <-
+  ces4_bay_asthma_pm25 %>%
+  filter(
+    !is.na(Asthma),
+    !is.na(PM2.5)
+  )
+ggplot(
+    data = bay_asthma_pm_tract,
+    aes(
+      x = PM2.5,
+      y = Asthma
+    )
+  ) +
+  geom_point()+
+  labs(
+    title = "Asthma x Pm 2.5 Scatterplot"
+  ) +
+  geom_smooth(method = "lm")
+```
+At this stage, the best fit line is not very clear with the points. But that is because there are several outliers and the points themselves are not balanced. 
+
+Coefficients
+```{r}
+model <-  lm(Asthma ~ PM2.5,bay_asthma_pm_tract )
+
+summary(model)
+```
+
+An increase of PM 2.5 by one unit appears to be  associated with an increase of Asthma by 19.862; With a p-value in the 0.01 to 0.05 range. This also conceptually makes sense and is a big part of what EJ activists are fighting about when it comes to Cap and Trade not covering local air pollution. 
+
+Plot Residuals 
+```{r}
+plot(density(residuals(model)))
+```
+Ideally our residual plots look like a bell curve. This curve is skewed to the left and unbalanced. 
+
+Run log on and  Create the Scatter Plot with PM2.5 on the x-axis and Asthma on the y-axis
+```{r}
+bay_asthma_pm_tract <-
+  ces4_bay_asthma_pm25 %>%
+  filter(
+    !is.na(Asthma),
+    !is.na(PM2.5)
+  )
+ggplot(
+    data = bay_asthma_pm_tract,
+    aes(
+      x = PM2.5,
+      y = log(Asthma)
+    )
+  ) +
+  geom_point()+
+  labs(
+    title = "Asthma x Pm 2.5 Scatterplot"
+  ) +
+  geom_smooth(method = "lm")
+```
+Coefficients
+```{r}
+model <-  lm(log(Asthma) ~ log(PM2.5),bay_asthma_pm_tract )
+
+summary(model)
+plot(density(residuals(model)))
+```
+This distribution looks way better, though the dip at what should be the peak of the bell curve is a bit confusing. This realtionship between asthma and PM 2.5 and residuals looks more normal though. 
+
+
+
