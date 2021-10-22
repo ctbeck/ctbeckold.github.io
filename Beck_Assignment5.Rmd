@@ -187,12 +187,38 @@ ggplot(
 ```
 Coefficients
 ```{r}
-model <-  lm(log(Asthma) ~ log(PM2.5),bay_asthma_pm_tract )
+model_log <-  lm(log(Asthma) ~ PM2.5,bay_asthma_pm_tract )
 
-summary(model)
-plot(density(residuals(model)))
+summary(model_log)
+plot(density(residuals(model_log)))
 ```
 This distribution looks way better, though the dip at what should be the peak of the bell curve is a bit confusing. This realtionship between asthma and PM 2.5 and residuals looks more normal though. 
 
+Add Residuals As a Column to the Spatial Dataset
+```{r}
+bay_asthma_pm_residuals <- 
+  bay_asthma_pm_tract %>%
+  mutate(
+    Residuals = residuals(model_log)
+    )
 
+residuals_pal <- colorNumeric(
+  palette = "Reds",
+  domain =bay_asthma_pm_residuals$Residuals
+)
 
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    data = bay_asthma_pm_residuals,
+    fillColor = ~residuals_pal(Residuals),
+    color = "white",
+    weight = 0.5,
+    fillOpacity = 0.5,
+    label = ~Residuals
+  )
+```
+
+Explain what a low residual means in the context of Asthma estimation (i.e., under- or over-estimation), and why you think this census tract in particular has one.
+
+A low residual is the expected y - actual y. So the lower the residual, the more accurate your expectation was. This means that our regression was pretty accurate. We understimated in San Jose which resulted in a negative residual which means that our expected y was much lower thaan the actual y. The furthest points North, South, and East were all overestimated. The expected y was higher than the actual y. The data we  got from our regression is similar to what the actual data shows. 
