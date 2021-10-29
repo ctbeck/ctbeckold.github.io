@@ -1,0 +1,186 @@
+---
+title: "Beck_Assignment6"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+
+Load Packages
+```{r}
+library(censusapi)
+library(tidyverse)
+library(tigris)
+library(sf)
+library(leaflet)
+
+
+Sys.setenv(CENSUS_KEY="c18a7f6e5cbbd1e7f0d3047d8b674cbaad89bcb3")
+```
+
+Load PUMS data
+
+```{r}
+ # pums_2019_1yr <- getCensus(
+ #   name = "acs/acs1/pums",
+ #   vintage = 2019,
+ #   region = "public use microdata area:*", 
+ #   regionin = "state:06",
+ #   vars = c(
+ #     "SERIALNO",
+ #     "SPORDER",
+ #     "PWGTP",
+ #     "WGTP",
+ #     "YBL",
+ #     "BLD",
+ #     "TEN",
+ #     "MV",
+ #     "HINCP",
+ #     "AGEP"
+ #   )
+ # )
+
+# saveRDS(pums_2019_1yr, "a6_pums.rds")
+pums_2019_1yr <- readRDS("a6_pums.rds")
+
+
+
+##Filter down to San Francisco PUMAS
+
+ca_pumas <-
+  pumas("CA", cb = T, progress_bar = F)
+
+sf_boundary <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME == "San Francisco")
+
+sf_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[sf_boundary, ] %>% 
+  st_drop_geometry() %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+
+sf_pums <-
+  pums_2019_1yr %>% 
+  mutate(
+    PUMA = str_pad(public_use_microdata_area,5,"left","0")
+  ) %>% 
+  filter(PUMA %in% sf_pumas$PUMACE10)
+
+##filtering the households built before 1960 (codes 1-3)
+
+sf_pums_clean <- sf_pums %>%
+  mutate(
+    YBL = as.numeric(YBL),
+    HINCP = as.numeric(HINCP),
+    AGEP = as.numeric(AGEP)
+  ) %>% 
+  filter(YBL %in% 1:3)%>%
+   group_by(SERIALNO)%>%
+   arrange(AGEP) %>%
+  summarize_all(first)
+
+#Create a variable (leadrisk) which is 1 if household income is less than $90K and the household has at least one child less than 6 years old, and 0 if not. Note that $90K is a simplification of the 80% of County AMI criteria from CES
+
+sf_leadrisk <-
+  sf_pums_clean %>% 
+  mutate(
+    leadrisk = ifelse(
+        (HINCP < 90000) &
+        (AGEP < 6),
+      1,
+      0
+    )
+  ) %>%
+  mutate(
+    BLD = as.factor(BLD), ##to make sure that R knows how to represent the data in the cols. 
+    TEN = as.factor(TEN),
+    MV = as.factor(MV),
+    PUMA = as.factor(PUMA)
+  )
+```
+
+Create the logistic regression model
+```{r}
+logit_model <- glm(
+  leadrisk ~ BLD + TEN + MV + PUMA, ##y before the tilde, x's after
+  family = quasibinomial(),
+  data = sf_leadrisk
+)
+
+summary(logit_model)
+```
+
+Stars represent results that are significant (outliers), 
+TEN3 and TEN4 are Rented and Occupied without payment of rent
+PUMA07504 is parts of Chinatown and polk Gulch
+PUMA07506 is parts of outer sunset and parkside
+PUMA07507 includes parts of Bayview. 
+
+This means that areas that are more industrial (not outer sunset, though it is close to the 280) are more statistically likely to have lead risk. PUMA 0706 and 0707 has a score of 1% and the rest have a score of 5%. The household that exceeded the threshold score generally had prediction values of less than 0.1. If organizations were to mail postcards to households of this type, they would narrow down to the above neighborhoods, and houses that are rented or occupied without payment. 
+
+
+```{r}
+sample <-
+  sample_n(sf_leadrisk, 1)
+
+test_predicted <-
+  predict(logit_model, newdata = sample, type = "response")
+```
+The predicted leadrisk for household 2019HU0300383 in row 1, based on our model is 0.2971217
+
+Create a new column in the data set for each row
+```{r}
+predicted_risk <- 
+  sf_leadrisk %>%
+  mutate(
+    prediction =  predict(logit_model, newdata = sf_leadrisk, type = "response")
+  )
+```
+
+Create the matrix
+```{r}
+summary_2x2 <-
+  predicted_risk %>% 
+  mutate(
+    leadrisk = ifelse(
+      leadrisk == 1, 
+      "Yes (Leadrisk)", 
+      "No (no leadrisk)"
+    ),
+    predicted_yes = ifelse(
+      prediction >= .1,
+      as.numeric(WGTP), ##weigh the family 
+      0
+    ),
+    predicted_no =  ifelse(
+      prediction < .1,
+      as.numeric(WGTP), ##weigh the family 
+      0
+    )
+  ) %>% 
+  group_by(leadrisk)
+ summarize <- summary_2x2 %>% ##count up all the Type 1/2 results
+   summarize(
+     give_kit = sum(predicted_yes),
+     no_kit = sum(predicted_no)
+   )
+summary_2x2
+summarize
+```
+Even though there was no lead risk in the house, 2777 would get a kit even if they didn't need it, 221620 were predicted accurately and no kit was needed. For the houses with lead risk, 421 were predicted yes accurately, and 3988 were inaccurately predicted. 
+
+421/ (421 +2777) = 13.16% of the population that were given kits that actually needed it. 
+86.86% is the number of false positives. 
+
+3988(3988+221620) = 1.7% of the population that was not given a kit actually needed it, this is the percentage of false negatives. 
+98.3% was accurate and did not have a lead risk and thus was not given a kit. 
+
+
+
+
+

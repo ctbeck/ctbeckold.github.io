@@ -257,7 +257,7 @@ bay_education_ethnicity_2019_stacked <- ##Lets you add a total ethnicity
   labs(
     x = "Educational attainment",
     y = "Population 25 years or older",
-    title = "Bay Area educational attainment by ethnicity",
+    title = "Santa Clara County educational attainment by ethnicity",
     fill = "Ethnicity"
   ) +
   coord_flip() +
